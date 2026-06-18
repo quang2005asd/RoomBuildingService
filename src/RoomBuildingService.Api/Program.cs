@@ -10,8 +10,8 @@ using RoomBuildingService.Infrastructure.Persistence.Repositories;
 var builder = WebApplication.CreateBuilder(args);
 var useInMemoryDatabase = builder.Configuration.GetValue<bool>("UseInMemoryDatabase");
 var connectionString =
-    builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? builder.Configuration["DATABASE_URL"];
+    builder.Configuration["DATABASE_URL"]
+    ?? builder.Configuration.GetConnectionString("DefaultConnection");
 
 if (!useInMemoryDatabase && string.IsNullOrWhiteSpace(connectionString))
 {
