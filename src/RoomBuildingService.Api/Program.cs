@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using RoomBuildingService.Api;
 using RoomBuildingService.Api.Middlewares;
 using RoomBuildingService.Core.Interfaces;
@@ -6,17 +7,20 @@ using RoomBuildingService.Infrastructure.BackgroundWorkers;
 using RoomBuildingService.Infrastructure.Messaging;
 using RoomBuildingService.Infrastructure.Persistence;
 using RoomBuildingService.Infrastructure.Persistence.Repositories;
+using System.Net;
 
 var builder = WebApplication.CreateBuilder(args);
 var useInMemoryDatabase = builder.Configuration.GetValue<bool>("UseInMemoryDatabase");
-var connectionString =
+var rawConnectionString =
     builder.Configuration["DATABASE_URL"]
     ?? builder.Configuration.GetConnectionString("DefaultConnection");
 
-if (!useInMemoryDatabase && string.IsNullOrWhiteSpace(connectionString))
+if (!useInMemoryDatabase && string.IsNullOrWhiteSpace(rawConnectionString))
 {
     throw new InvalidOperationException("Database connection string is not configured.");
 }
+
+var connectionString = NormalizeConnectionString(rawConnectionString);
 
 builder.Services.AddDbContext<AppDbContext>(opt =>
 {
@@ -76,5 +80,37 @@ app.UseExceptionHandler(_ => { });
 app.UseCors("AllowAll");
 app.MapControllers();
 app.Run();
+
+static string NormalizeConnectionString(string? rawConnectionString)
+{
+    if (string.IsNullOrWhiteSpace(rawConnectionString))
+    {
+        return string.Empty;
+    }
+
+    if (!rawConnectionString.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase)
+        && !rawConnectionString.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
+    {
+        return rawConnectionString;
+    }
+
+    var databaseUri = new Uri(rawConnectionString);
+    var userInfo = databaseUri.UserInfo.Split(':', 2);
+    var username = userInfo.Length > 0 ? WebUtility.UrlDecode(userInfo[0]) : string.Empty;
+    var password = userInfo.Length > 1 ? WebUtility.UrlDecode(userInfo[1]) : string.Empty;
+
+    var builder = new NpgsqlConnectionStringBuilder
+    {
+        Host = databaseUri.Host,
+        Port = databaseUri.Port > 0 ? databaseUri.Port : 5432,
+        Database = databaseUri.AbsolutePath.Trim('/'),
+        Username = username,
+        Password = password,
+        SslMode = SslMode.Require,
+        TrustServerCertificate = true
+    };
+
+    return builder.ConnectionString;
+}
 
 public partial class Program { }
