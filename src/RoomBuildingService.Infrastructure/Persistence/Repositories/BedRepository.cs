@@ -31,6 +31,7 @@ public class BedRepository(AppDbContext db) : IBedRepository
         bed.Id = Guid.NewGuid();
         bed.CreatedAt = DateTime.UtcNow;
         bed.Status = NormalizeBedStatus(bed.Status, fallback: "AVAILABLE");
+        ApplyStudentOccupancyFields(bed);
 
         db.Beds.Add(bed);
         room.Beds.Add(bed);
@@ -50,6 +51,10 @@ public class BedRepository(AppDbContext db) : IBedRepository
 
         existing.BedNumber = bed.BedNumber;
         existing.Status = NormalizeBedStatus(bed.Status, fallback: existing.Status);
+        existing.StudentId = bed.StudentId;
+        existing.StudentName = bed.StudentName;
+        existing.StudentCode = bed.StudentCode;
+        ApplyStudentOccupancyFields(existing);
         existing.UpdatedAt = DateTime.UtcNow;
 
         await SyncRoomByBedsAsync(existing.Room);
@@ -131,5 +136,15 @@ public class BedRepository(AppDbContext db) : IBedRepository
             "INACTIVE" => "INACTIVE",
             _ => throw new BusinessRuleException("Bed status must be AVAILABLE/OCCUPIED/UNDER_MAINTENANCE/INACTIVE."),
         };
+    }
+
+    private static void ApplyStudentOccupancyFields(Bed bed)
+    {
+        if (!string.Equals(bed.Status, "OCCUPIED", StringComparison.Ordinal))
+        {
+            bed.StudentId = null;
+            bed.StudentName = null;
+            bed.StudentCode = null;
+        }
     }
 }

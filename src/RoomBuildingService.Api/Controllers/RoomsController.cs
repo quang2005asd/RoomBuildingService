@@ -190,6 +190,9 @@ public class RoomsController(IRoomRepository repo) : ControllerBase
         RoomId = bed.RoomId,
         BedNumber = bed.BedNumber,
         Status = bed.Status,
+        StudentId = bed.StudentId,
+        StudentName = bed.StudentName,
+        StudentCode = bed.StudentCode,
         CreatedAt = bed.CreatedAt,
         UpdatedAt = bed.UpdatedAt,
     };

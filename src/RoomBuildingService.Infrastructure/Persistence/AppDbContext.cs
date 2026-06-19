@@ -86,6 +86,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasKey(x => x.Id);
             e.Property(x => x.BedNumber).HasMaxLength(20).IsRequired();
             e.Property(x => x.Status).HasMaxLength(20).HasDefaultValue("AVAILABLE");
+            e.Property(x => x.StudentName).HasMaxLength(150);
+            e.Property(x => x.StudentCode).HasMaxLength(50);
 
             e.HasIndex(x => new { x.RoomId, x.BedNumber }).IsUnique();
             e.HasIndex(x => new { x.RoomId, x.Status });

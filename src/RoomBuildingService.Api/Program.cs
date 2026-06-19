@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Npgsql;
 using RoomBuildingService.Api;
 using RoomBuildingService.Api.Middlewares;
@@ -63,6 +64,7 @@ using (var scope = app.Services.CreateScope())
     if (db.Database.IsRelational())
     {
         db.Database.EnsureCreated();
+        EnsureBedIntegrationColumns(db.Database);
     }
 
     SeedData.Initialize(db);
@@ -80,6 +82,15 @@ app.UseExceptionHandler(_ => { });
 app.UseCors("AllowAll");
 app.MapControllers();
 app.Run();
+
+static void EnsureBedIntegrationColumns(DatabaseFacade database)
+{
+    database.ExecuteSqlRaw("""
+        ALTER TABLE public."Beds" ADD COLUMN IF NOT EXISTS "StudentId" uuid NULL;
+        ALTER TABLE public."Beds" ADD COLUMN IF NOT EXISTS "StudentName" character varying(150) NULL;
+        ALTER TABLE public."Beds" ADD COLUMN IF NOT EXISTS "StudentCode" character varying(50) NULL;
+    """);
+}
 
 static string NormalizeConnectionString(string? rawConnectionString)
 {
