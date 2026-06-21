@@ -145,6 +145,9 @@ public class RoomRepository(AppDbContext db) : IRoomRepository
         if (normalizedStatus == "FULL" && CalculateAvailableSlots(existing) > 0)
             throw new BusinessRuleException("Room still has available beds, so it cannot be forced to FULL.");
 
+        if (normalizedStatus is "UNDER_MAINTENANCE" or "INACTIVE" && CalculateOccupancy(existing) > 0)
+            throw new BusinessRuleException("Cannot move a room to UNDER_MAINTENANCE or INACTIVE while it still has occupied beds.");
+
         await SyncRoomStatusAsync(existing, normalizedStatus, maintenanceReason);
         await db.SaveChangesAsync();
     }
@@ -153,12 +156,16 @@ public class RoomRepository(AppDbContext db) : IRoomRepository
     {
         var existing = await db.Rooms
             .Include(r => r.Beds)
+            .Include(r => r.Equipments)
             .FirstOrDefaultAsync(r => r.Id == id)
             ?? throw new NotFoundException("Room", id);
 
         existing.CurrentOccupancy = CalculateOccupancy(existing);
         if (existing.CurrentOccupancy > 0)
             throw new BusinessRuleException("Cannot delete a room that still has occupied beds.");
+
+        if (existing.Equipments.Any(e => e.Status == "ACTIVE" || e.Status == "UNDER_MAINTENANCE" || e.Status == "BROKEN"))
+            throw new BusinessRuleException("Cannot delete a room that still has equipment records. Remove equipment first.");
 
         db.Rooms.Remove(existing);
         await db.SaveChangesAsync();

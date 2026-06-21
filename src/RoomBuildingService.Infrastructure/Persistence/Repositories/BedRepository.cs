@@ -49,8 +49,12 @@ public class BedRepository(AppDbContext db) : IBedRepository
             .FirstOrDefaultAsync(b => b.Id == bed.Id)
             ?? throw new NotFoundException("Bed", bed.Id);
 
+        var normalizedStatus = NormalizeBedStatus(bed.Status, fallback: existing.Status);
+        if (existing.Status == "OCCUPIED" && normalizedStatus is "UNDER_MAINTENANCE" or "INACTIVE")
+            throw new BusinessRuleException("Cannot move an occupied bed to UNDER_MAINTENANCE or INACTIVE.");
+
         existing.BedNumber = bed.BedNumber;
-        existing.Status = NormalizeBedStatus(bed.Status, fallback: existing.Status);
+        existing.Status = normalizedStatus;
         existing.StudentId = bed.StudentId;
         existing.StudentName = bed.StudentName;
         existing.StudentCode = bed.StudentCode;

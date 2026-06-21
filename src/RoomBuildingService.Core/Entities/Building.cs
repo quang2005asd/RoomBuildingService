@@ -11,4 +11,5 @@ public class Building
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedAt { get; set; }
     public ICollection<Room> Rooms { get; set; } = new List<Room>();
+    public ICollection<BuildingFacility> Facilities { get; set; } = new List<BuildingFacility>();
 }

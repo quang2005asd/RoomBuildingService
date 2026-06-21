@@ -11,6 +11,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Room> Rooms => Set<Room>();
     public DbSet<Bed> Beds => Set<Bed>();
     public DbSet<RoomEquipment> RoomEquipments => Set<RoomEquipment>();
+    public DbSet<BuildingFacility> BuildingFacilities => Set<BuildingFacility>();
+    public DbSet<BuildingFacilityPricing> BuildingFacilityPricings => Set<BuildingFacilityPricing>();
+    public DbSet<BuildingFacilityContract> BuildingFacilityContracts => Set<BuildingFacilityContract>();
     public DbSet<OutboxEvent> OutboxEvents => Set<OutboxEvent>();
 
     protected override void OnModelCreating(ModelBuilder mb)
@@ -27,6 +30,69 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasCheckConstraint("CHK_Building_GenderType", "\"GenderType\" IN ('MALE', 'FEMALE', 'MIXED')");
             e.HasCheckConstraint("CHK_Building_Status", "\"Status\" IN ('ACTIVE', 'INACTIVE', 'UNDER_MAINTENANCE')");
             e.HasCheckConstraint("CHK_Building_TotalFloors", "\"TotalFloors\" > 0");
+        });
+
+        mb.Entity<BuildingFacility>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.FacilityName).HasMaxLength(100).IsRequired();
+            e.Property(x => x.Status).HasMaxLength(30).HasDefaultValue("ACTIVE");
+            e.Property(x => x.Description).HasMaxLength(500);
+
+            e.HasIndex(x => new { x.BuildingId, x.FacilityName }).IsUnique();
+            e.HasCheckConstraint("CHK_BuildingFacility_Status", "\"Status\" IN ('ACTIVE', 'INACTIVE', 'UNDER_MAINTENANCE')");
+
+            e.HasOne(x => x.Building)
+                .WithMany(x => x.Facilities)
+                .HasForeignKey(x => x.BuildingId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        mb.Entity<BuildingFacilityPricing>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Price).HasColumnType("numeric(18,2)");
+            e.Property(x => x.BillingCycle).HasMaxLength(20).HasDefaultValue("FREE");
+            e.Property(x => x.Status).HasMaxLength(20).HasDefaultValue("ACTIVE");
+            e.Property(x => x.Description).HasMaxLength(500);
+
+            e.HasIndex(x => new { x.FacilityId, x.BillingCycle, x.IsPaid }).IsUnique();
+            e.HasCheckConstraint("CHK_BuildingFacilityPricing_Price", "\"Price\" >= 0");
+            e.HasCheckConstraint("CHK_BuildingFacilityPricing_BillingCycle", "\"BillingCycle\" IN ('FREE', 'MONTHLY', 'YEARLY')");
+            e.HasCheckConstraint("CHK_BuildingFacilityPricing_Status", "\"Status\" IN ('ACTIVE', 'INACTIVE')");
+
+            e.HasOne(x => x.Facility)
+                .WithMany(x => x.Pricings)
+                .HasForeignKey(x => x.FacilityId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        mb.Entity<BuildingFacilityContract>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.ContractCode).HasMaxLength(50).IsRequired();
+            e.Property(x => x.StudentName).HasMaxLength(150);
+            e.Property(x => x.StudentCode).HasMaxLength(50);
+            e.Property(x => x.ContractType).HasMaxLength(20).HasDefaultValue("MONTHLY");
+            e.Property(x => x.TotalAmount).HasColumnType("numeric(18,2)");
+            e.Property(x => x.Status).HasMaxLength(20).HasDefaultValue("ACTIVE");
+            e.Property(x => x.Notes).HasMaxLength(500);
+
+            e.HasIndex(x => x.ContractCode).IsUnique();
+            e.HasIndex(x => new { x.FacilityId, x.Status });
+            e.HasCheckConstraint("CHK_BuildingFacilityContract_Type", "\"ContractType\" IN ('MONTHLY', 'YEARLY')");
+            e.HasCheckConstraint("CHK_BuildingFacilityContract_Status", "\"Status\" IN ('ACTIVE', 'EXPIRED', 'CANCELLED')");
+            e.HasCheckConstraint("CHK_BuildingFacilityContract_TotalAmount", "\"TotalAmount\" >= 0");
+
+            e.HasOne(x => x.Facility)
+                .WithMany(x => x.Contracts)
+                .HasForeignKey(x => x.FacilityId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne(x => x.Pricing)
+                .WithMany(x => x.Contracts)
+                .HasForeignKey(x => x.PricingId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         mb.Entity<RoomType>(e =>

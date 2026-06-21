@@ -11,7 +11,9 @@ using RoomBuildingService.Infrastructure.Persistence.Repositories;
 using System.Net;
 
 var builder = WebApplication.CreateBuilder(args);
-var useInMemoryDatabase = builder.Configuration.GetValue<bool>("UseInMemoryDatabase");
+var useInMemoryDatabase =
+    builder.Configuration.GetValue<bool>("UseInMemoryDatabase")
+    || builder.Environment.IsEnvironment("Testing");
 var rawConnectionString =
     builder.Configuration["DATABASE_URL"]
     ?? builder.Configuration.GetConnectionString("DefaultConnection");
@@ -41,6 +43,9 @@ builder.Services.AddScoped<IRoomTypeRepository, RoomTypeRepository>();
 builder.Services.AddScoped<IRoomRepository, RoomRepository>();
 builder.Services.AddScoped<IBedRepository, BedRepository>();
 builder.Services.AddScoped<IEquipmentRepository, EquipmentRepository>();
+builder.Services.AddScoped<IBuildingFacilityRepository, BuildingFacilityRepository>();
+builder.Services.AddScoped<IBuildingFacilityPricingRepository, BuildingFacilityPricingRepository>();
+builder.Services.AddScoped<IBuildingFacilityContractRepository, BuildingFacilityContractRepository>();
 
 builder.Services.AddSingleton<RabbitMQPublisher>();
 builder.Services.AddHostedService<OutboxWorker>();
@@ -61,10 +66,11 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    if (db.Database.IsRelational())
+    if (!useInMemoryDatabase)
     {
         db.Database.EnsureCreated();
         EnsureBedIntegrationColumns(db.Database);
+        EnsureBuildingFacilitySchema(db.Database);
     }
 
     SeedData.Initialize(db);
@@ -89,6 +95,60 @@ static void EnsureBedIntegrationColumns(DatabaseFacade database)
         ALTER TABLE public."Beds" ADD COLUMN IF NOT EXISTS "StudentId" uuid NULL;
         ALTER TABLE public."Beds" ADD COLUMN IF NOT EXISTS "StudentName" character varying(150) NULL;
         ALTER TABLE public."Beds" ADD COLUMN IF NOT EXISTS "StudentCode" character varying(50) NULL;
+    """);
+}
+
+static void EnsureBuildingFacilitySchema(DatabaseFacade database)
+{
+    database.ExecuteSqlRaw("""
+        CREATE TABLE IF NOT EXISTS public."BuildingFacilities" (
+            "Id" uuid PRIMARY KEY,
+            "BuildingId" uuid NOT NULL,
+            "FacilityName" character varying(100) NOT NULL,
+            "Status" character varying(30) NOT NULL DEFAULT 'ACTIVE',
+            "Description" character varying(500) NULL,
+            "CreatedAt" timestamp with time zone NOT NULL,
+            "UpdatedAt" timestamp with time zone NULL
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS "IX_BuildingFacilities_BuildingId_FacilityName"
+            ON public."BuildingFacilities" ("BuildingId", "FacilityName");
+
+        CREATE TABLE IF NOT EXISTS public."BuildingFacilityPricings" (
+            "Id" uuid PRIMARY KEY,
+            "FacilityId" uuid NOT NULL,
+            "IsPaid" boolean NOT NULL,
+            "Price" numeric(18,2) NOT NULL DEFAULT 0,
+            "BillingCycle" character varying(20) NOT NULL DEFAULT 'FREE',
+            "Status" character varying(20) NOT NULL DEFAULT 'ACTIVE',
+            "Description" character varying(500) NULL,
+            "CreatedAt" timestamp with time zone NOT NULL,
+            "UpdatedAt" timestamp with time zone NULL
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS "IX_BuildingFacilityPricings_FacilityId_BillingCycle_IsPaid"
+            ON public."BuildingFacilityPricings" ("FacilityId", "BillingCycle", "IsPaid");
+
+        CREATE TABLE IF NOT EXISTS public."BuildingFacilityContracts" (
+            "Id" uuid PRIMARY KEY,
+            "FacilityId" uuid NOT NULL,
+            "PricingId" uuid NOT NULL,
+            "ContractCode" character varying(50) NOT NULL,
+            "StudentId" uuid NULL,
+            "StudentName" character varying(150) NULL,
+            "StudentCode" character varying(50) NULL,
+            "ContractType" character varying(20) NOT NULL DEFAULT 'MONTHLY',
+            "StartDate" date NOT NULL,
+            "EndDate" date NOT NULL,
+            "TotalAmount" numeric(18,2) NOT NULL DEFAULT 0,
+            "Status" character varying(20) NOT NULL DEFAULT 'ACTIVE',
+            "Notes" character varying(500) NULL,
+            "CreatedAt" timestamp with time zone NOT NULL,
+            "UpdatedAt" timestamp with time zone NULL
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS "IX_BuildingFacilityContracts_ContractCode"
+            ON public."BuildingFacilityContracts" ("ContractCode");
     """);
 }
 
